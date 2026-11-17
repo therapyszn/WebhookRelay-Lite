@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebhookRelay Lite</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-hover: #1f6feb;
+      --green: #3fb950;
+      --red: #f85149;
+      --yellow: #d29922;
+      --purple: #bc8cff;
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-bg);
+    }
+    .brand { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; }
+    .sidebar {
+      width: 360px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: var(--card-bg);
+      flex-shrink: 0;
+    }
+    .search-box {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .search-box input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+    .search-box input:focus { border-color: var(--accent); }
+    .event-list { flex: 1; overflow-y: auto; }
+    .event-item {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .event-item:hover { background: rgba(88, 166, 255, 0.08); }
+    .event-item.active { background: rgba(88, 166, 255, 0.15); border-left: 3px solid var(--accent); }
+    .event-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .method-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+    }
+    .method-POST { background: rgba(63, 185, 80, 0.2); color: var(--green); }
+    .method-GET { background: rgba(88, 166, 255, 0.2); color: var(--accent); }
+    .method-PUT, .method-PATCH { background: rgba(210, 153, 34, 0.2); color: var(--yellow); }
+    .method-DELETE { background: rgba(248, 81, 73, 0.2); color: var(--red); }
+    .event-path { font-family: var(--font-mono); font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px; }
+    .event-meta { font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; }
+    .main-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); gap: 12px; }
+    .detail-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card-bg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .detail-title { display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); }
+    .actions { display: flex; gap: 8px; }
+    button {
+      background: #21262d;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button:hover { background: #30363d; border-color: #8b949e; }
+    button.primary { background: #238636; border-color: rgba(240, 246, 252, 0.1); color: #fff; }
+    button.primary:hover { background: #2ea043; }
+    button.danger:hover { background: #da3633; border-color: #f85149; color: #fff; }
+    .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--card-bg); padding: 0 16px; }
+    .tab {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      user-select: none;
+    }
+    .tab.active { color: var(--text); border-bottom-color: #f78166; font-weight: 600; }
+    .tab-content { flex: 1; overflow-y: auto; padding: 20px; }
+    pre {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      background: var(--card-bg);
+      padding: 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    th { color: var(--text-muted); font-weight: 600; }
+    td.key { font-family: var(--font-mono); color: var(--accent); width: 30%; }
+    td.val { font-family: var(--font-mono); word-break: break-all; }
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 100;
+    }
+    .modal {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; width: 720px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .modal-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-body { padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .form-group input, .form-group select, .form-group textarea {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text); font-size: 13px; outline: none; font-family: var(--font-mono);
+    }
+    .form-group textarea { resize: vertical; min-height: 160px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .modal-footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+    .replay-response { margin-top: 12px; padding: 12px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+
+  <div class="sidebar">
+    <header>
+      <div class="brand">
+        <span class="status-dot"></span>
+        WebhookRelay Lite
+      </div>
+      <button onclick="clearAllEvents()" style="padding: 4px 8px; font-size: 11px;">Clear All</button>
+    </header>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Filter events (path, body, headers)..." oninput="filterEvents()">
+    </div>
+    <div class="event-list" id="eventList"></div>
+  </div>
+
+  <div class="main-panel" id="mainPanel">
+    <div class="empty-state" id="emptyState">
+      <h3>No webhook event selected</h3>
+      <p>Send a POST request to <code>http://localhost:8080/webhook</code> to capture it live.</p>
+    </div>
+
+    <div id="detailView" style="display: none; flex-direction: column; height: 100%;">
+      <div class="detail-header">
+        <div class="detail-title">
+          <span id="detailMethod" class="method-badge"></span>
+          <span id="detailPath"></span>
+        </div>
+        <div class="actions">
+          <button onclick="openReplayModal()" class="primary">Replay</button>
+          <button onclick="copyCurl()">Copy cURL</button>
+          <button onclick="deleteCurrentEvent()" class="danger">Delete</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" onclick="setTab('payload')">Payload</div>
+        <div class="tab" onclick="setTab('headers')">Headers</div>
+        <div class="tab" onclick="setTab('query')">Query Params</div>
+        <div class="tab" onclick="setTab('signer')">HMAC Signer</div>
+      </div>
+
+      <div class="tab-content" id="tabContent">
+        <!-- Payload Tab -->
+        <div id="tab-payload">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 12px; color: var(--text-muted);" id="payloadMeta"></span>
+            <button onclick="copyPayload()" style="padding: 2px 8px; font-size: 11px;">Copy Raw</button>
+          </div>
+          <pre id="payloadCode"></pre>
+        </div>
+
+        <!-- Headers Tab -->
+        <div id="tab-headers" style="display: none;">
+          <table id="headersTable">
+            <thead><tr><th>Header</th><th>Value</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- Query Tab -->
+        <div id="tab-query" style="display: none;">
+          <table id="queryTable">
+            <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- HMAC Signer Tab -->
+        <div id="tab-signer" style="display: none;">
+          <div style="max-width: 600px; display: flex; flex-direction: column; gap: 14px;">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Provider</label>
+                <select id="signerProvider" onchange="updateSignerPreview()">
+                  <option value="stripe">Stripe (stripe-signature)</option>
+                  <option value="github">GitHub (x-hub-signature-256)</option>
+                  <option value="shopify">Shopify (x-shopify-hmac-sha256)</option>
+                  <option value="generic">Generic (x-signature-sha256)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Signing Secret</label>
+                <input type="text" id="signerSecret" placeholder="e.g. whsec_..." oninput="updateSignerPreview()">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Calculated Signature Header</label>
+              <pre id="signerHeaderPreview" style="padding: 10px; font-size: 12px;">Enter secret above to generate header.</pre>
+            </div>
+            <button onclick="openReplayWithCurrentSigner()" class="primary" style="align-self: flex-start;">Send Replay with this Signature</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Replay Modal -->
+  <div class="modal-overlay" id="replayModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h4 style="font-size: 14px;">Replay Webhook</h4>
+        <button onclick="closeReplayModal()" style="padding: 2px 8px;">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group" style="flex: 2;">
+            <label>Target URL</label>
+            <input type="text" id="replayTargetUrl" value="http://localhost:3000/api/webhook">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label>Method</label>
+            <select id="replayMethod">
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="GET">GET</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>HMAC Provider</label>
+            <select id="replayProvider">
+              <option value="none">None (Keep original headers)</option>
+              <option value="stripe">Stripe</option>
+              <option value="github">GitHub</option>
+              <option value="shopify">Shopify</option>
+              <option value="generic">Generic</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Secret (Required for HMAC recalculation)</label>
+            <input type="text" id="replaySecret" placeholder="whsec_...">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Payload (editable)</label>
+          <textarea id="replayPayload"></textarea>
+        </div>
+        <div id="replayResult" style="display: none;" class="replay-response"></div>
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeReplayModal()">Cancel</button>
+        <button onclick="submitReplay()" id="replaySubmitBtn" class="primary">Dispatch Replay</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let events = [];
+    let selectedEventId = null;
+
+    async function loadEvents() {
+      const res = await fetch('/api/events');
+      events = await res.json();
+      renderEventList();
+      if (events.length > 0 && !selectedEventId) {
+        selectEvent(events[0].id);
+      }
+    }
+
+    function initSSE() {
+      const sse = new EventSource('/api/events/stream');
+      sse.onmessage = (msg) => {
+        const event = JSON.parse(msg.data);
+        events.unshift(event);
+        renderEventList();
+        if (!selectedEventId) {
+          selectEvent(event.id);
+        }
+      };
+    }
+
+    function renderEventList() {
+      const listEl = document.getElementById('eventList');
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = events.filter(e => 
+        e.path.toLowerCase().includes(search) || 
+        e.body.toLowerCase().includes(search) ||
+        e.method.toLowerCase().includes(search)
+      );
+
+      listEl.innerHTML = filtered.map(e => `
+        <div class="event-item ${e.id === selectedEventId ? 'active' : ''}" onclick="selectEvent('${e.id}')">
+          <div class="event-top">
+            <span class="method-badge method-${e.method}">${e.method}</span>
+            <span class="event-path" title="${e.path}">${e.path}</span>
+          </div>
+          <div class="event-meta">
+            <span>${new Date(e.created_at).toLocaleTimeString()}</span>
+            <span>${formatBytes(e.body ? e.body.length : 0)}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function filterEvents() {
+      renderEventList();
+    }
+
+    function selectEvent(id) {
+      selectedEventId = id;
+      renderEventList();
+      const e = events.find(item => item.id === id);
+      if (!e) return;
+
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('detailView').style.display = 'flex';
+
+      const methodBadge = document.getElementById('detailMethod');
+      methodBadge.textContent = e.method;
+      methodBadge.className = `method-badge method-${e.method}`;
+      document.getElementById('detailPath').textContent = e.path;
+
+      let formattedBody = e.body;
+      try {
+        const parsed = JSON.parse(e.body);
+        formattedBody = JSON.stringify(parsed, null, 2);
+      } catch (_) {}
+
+      document.getElementById('payloadCode').textContent = formattedBody;
+      document.getElementById('payloadMeta').textContent = `${e.content_type || 'text/plain'} • ${formatBytes(e.body.length)} • Client: ${e.client_ip}`;
+
+      const tbody = document.querySelector('#headersTable tbody');
+      tbody.innerHTML = Object.entries(e.headers).map(([k, v]) => `
+        <tr><td class="key">${escapeHtml(k)}</td><td class="val">${escapeHtml(v)}</td></tr>
+      `).join('');
+
+      const qbody = document.querySelector('#queryTable tbody');
+      const qEntries = Object.entries(e.query_params);
+      if (qEntries.length === 0) {
+        qbody.innerHTML = '<tr><td colspan="2" style="color: var(--text-muted); text-align: center;">No query parameters</td></tr>';
+      } else {
+        qbody.innerHTML = qEntries.map(([k, v]) => `
+          <tr><td class="key">${escapeHtml(k)}</td><td class="val">${escapeHtml(String(v))}</td></tr>
+        `).join('');
+      }
+
+      updateSignerPreview();
+    }
+
+    function setTab(name) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      ['payload', 'headers', 'query', 'signer'].forEach(t => {
+        document.getElementById(`tab-${t}`).style.display = t === name ? 'block' : 'none';
+      });
+    }
+
+    async function updateSignerPreview() {
+      const e = events.find(item => item.id === selectedEventId);
+      if (!e) return;
+
+      const provider = document.getElementById('signerProvider').value;
+      const secret = document.getElementById('signerSecret').value.trim();
+      const preview = document.getElementById('signerHeaderPreview');
+
+      if (!secret) {
+        preview.textContent = 'Enter a secret above to preview generated signature headers.';
+        return;
+      }
+
+      const res = await fetch('/api/sign', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({provider, secret, payload: e.body})
+      });
+      const data = await res.json();
+      preview.textContent = JSON.stringify(data.headers, null, 2);
+    }
+
+    function openReplayModal() {
+      const e = events.find(item => item.id === selectedEventId);
+      if (!e) return;
+      document.getElementById('replayMethod').value = e.method;
+      document.getElementById('replayPayload').value = e.body;
+      document.getElementById('replayResult').style.display = 'none';
+      document.getElementById('replayModal').style.display = 'flex';
+    }
+
+    function openReplayWithCurrentSigner() {
+      openReplayModal();
+      document.getElementById('replayProvider').value = document.getElementById('signerProvider').value;
+      document.getElementById('replaySecret').value = document.getElementById('signerSecret').value;
+    }
+
+    function closeReplayModal() {
+      document.getElementById('replayModal').style.display = 'none';
+    }
+
+    async function submitReplay() {
+      const targetUrl = document.getElementById('replayTargetUrl').value.trim();
+      const method = document.getElementById('replayMethod').value;
+      const provider = document.getElementById('replayProvider').value;
+      const secret = document.getElementById('replaySecret').value.trim();
+      const payload = document.getElementById('replayPayload').value;
+      const btn = document.getElementById('replaySubmitBtn');
+      const resultBox = document.getElementById('replayResult');
+
+      btn.disabled = true;
+      btn.textContent = 'Dispatching...';
+
+      try {
+        const res = await fetch('/api/replay', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            event_id: selectedEventId,
+            target_url: targetUrl,
+            method,
+            provider: provider === 'none' ? null : provider,
+            secret: secret || null,
+            payload
+          })
+        });
+        const data = await res.json();
+        resultBox.style.display = 'block';
+        if (data.status_code >= 200 && data.status_code < 300) {
+          resultBox.innerHTML = `<span style="color: var(--green); font-weight: bold;">HTTP ${data.status_code} Success (${data.duration_ms}ms)</span><pre style="margin-top: 8px;">${escapeHtml(data.response_body)}</pre>`;
+        } else {
+          resultBox.innerHTML = `<span style="color: var(--red); font-weight: bold;">HTTP ${data.status_code} Error (${data.duration_ms}ms)</span><pre style="margin-top: 8px;">${escapeHtml(data.response_body)}</pre>`;
+        }
+      } catch (err) {
+        resultBox.style.display = 'block';
+        resultBox.innerHTML = `<span style="color: var(--red);">Replay failed: ${escapeHtml(err.message)}</span>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Dispatch Replay';
+      }
+    }
+
+    async function deleteCurrentEvent() {
+      if (!selectedEventId) return;
+      await fetch(`/api/events/${selectedEventId}`, {method: 'DELETE'});
+      events = events.filter(e => e.id !== selectedEventId);
+      selectedEventId = events.length ? events[0].id : null;
+      renderEventList();
+      if (selectedEventId) {
+        selectEvent(selectedEventId);
+      } else {
+        document.getElementById('detailView').style.display = 'none';
+        document.getElementById('emptyState').style.display = 'flex';
+      }
+    }
+
+    async function clearAllEvents() {
+      if (!confirm('Clear all captured webhook events?')) return;
+      await fetch('/api/events', {method: 'DELETE'});
+      events = [];
+      selectedEventId = null;
+      renderEventList();
+      document.getElementById('detailView').style.display = 'none';
+      document.getElementById('emptyState').style.display = 'flex';
+    }
+
+    function copyCurl() {
+      const e = events.find(item => item.id === selectedEventId);
+      if (!e) return;
+      let curl = `curl -X ${e.method} "http://localhost:8080${e.path}" \\\n`;
+      for (const [k, v] of Object.entries(e.headers)) {
+        if (!['host', 'content-length'].includes(k.toLowerCase())) {
+          curl += `  -H "${k}: ${v}" \\\n`;
+        }
+      }
+      if (e.body) {
+        curl += `  --data '${e.body.replace(/'/g, "'\\''")}'`;
+      }
+      navigator.clipboard.writeText(curl);
+      alert('cURL copied to clipboard!');
+    }
+
+    function copyPayload() {
+      const e = events.find(item => item.id === selectedEventId);
+      if (!e) return;
+      navigator.clipboard.writeText(e.body);
+      alert('Payload copied to clipboard!');
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    loadEvents();
+    initSSE();
+  </script>
+</body>
+</html>
