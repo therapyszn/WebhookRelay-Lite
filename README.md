@@ -98,6 +98,12 @@ The event will appear immediately on the dashboard with headers, payload, and re
 
 ---
 
+## Developers
+
+[![therapyszn](https://img.shields.io/badge/therapyszn-GITHUB-black?style=for-the-badge&logo=github&labelColor=555555)](https://github.com/therapyszn)
+
+---
+
 ## License
 
 MIT License.
